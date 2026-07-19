@@ -1,42 +1,11 @@
-{:adr/id "2607162700"
- :adr/title "cloud-itonami ISIC-562 Event Catering Operations Coordination Actor"
- :adr/status "accepted"
- :adr/date "2026-07-15"
- :adr/scope
- {:repo "orgs/cloud-itonami/cloud-itonami-isic-562"
-  :registry "orgs/kotoba-lang/industry"
-  :isic-code 562
-  :wave 4}
- :decision
- {:id "cloud-itonami-isic-562"
-  :name "Event catering and other food service activities"
-  :isic-code "562"
-  :business-id "cloud-itonami-isic-562"
-  :repo "https://github.com/cloud-itonami/cloud-itonami-isic-562"
-  :public? true
-  :modules
-  ["cateringops.store"
-   "cateringops.advisor"
-   "cateringops.governor"
-   "cateringops.operation"
-   "cateringops.phase"
-   "cateringops.sim"]
-  :allowed-operations
-  [{:op :schedule-catering-event
-    :description "Event booking/scheduling logistics"}
-   {:op :coordinate-delivery-status-update
-    :description "Administrative delivery/logistics tracking"}
-   {:op :coordinate-supply-request
-    :description "Non-food consumable coordination"}
-   {:op :schedule-staff-shift-proposal
-    :description "Administrative shift proposal"}
-   {:op :flag-safety-concern
-    :description "Facility/sanitation/safety escalation"}]
-  :governor-hard-checks 3
-  :rollout-phases 4
-  :tests-passing 16}
- :verification
- {:tests "16/16 passing"
-  :demo "5/5 scenarios completed"
-  :repo-public? true
-  :registry-entry-updated? false}}
+{:itonami.blueprint/id "cloud-itonami-isic-562"
+ :itonami.blueprint/name "Event Catering and Other Food Service Activities - Operations Coordination"
+ :itonami.blueprint/isic-rev4 "562"
+ :itonami.blueprint/domain :services/catering-coordination
+ :itonami.blueprint/license "AGPL-3.0"
+ :itonami.blueprint/social-impact [:operational-efficiency :facility-safety :administrative-transparency]
+ :itonami.blueprint/governor :cateringops-governor
+ :itonami.blueprint/robotics false
+ :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger]
+ :itonami.blueprint/status :public-oss
+ :itonami.blueprint/maturity :implemented}
