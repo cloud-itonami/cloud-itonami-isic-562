@@ -1,94 +1,95 @@
 (ns cateringops.sim
-  "Deterministic demo runner (5 scenarios)"
-  (:require [cateringops.store :as store]
-            [cateringops.operation :as op]
-            [cateringops.phase :as phase]
-            [cateringops.governor :as gov]))
+  "Demo driver -- `clojure -M:dev:run`. Walks a registered/verified
+  event and delivery through a clean phase-3 auto-commit, an
+  always-escalate safety concern (human approves), an auto-commit
+  supply coordination, and a hard-hold (unregistered event), then
+  prints the resulting audit ledger. Mirrors `cerealops.sim`
+  (cloud-itonami-isic-0111)."
+  (:require [langgraph.graph :as g]
+            [cateringops.operation :as operation]
+            [cateringops.store :as store]))
 
-;; --- Demo Scenarios ---
+(def coordinator {:actor-id "catering-ops-01" :role :catering-coordinator :phase 3})
 
-(defn scenario-1-event-scheduling
-  "Scenario 1: Schedule catering event (happy path)"
-  [s]
-  (println "\n[Scenario 1] Event Scheduling (Happy Path)")
-  (let [store (store/load-demo-events! s)]
-    (store/register-event! store (store/new-event "E003" "Birthday Party" "Jane Doe" "2026-08-10" "Community Center" 80))
-    (store/verify-event! store "E003")
-    (let [result (op/execute-operation
-                  :schedule-catering-event
-                  "E003"
-                  {:capacity 80 :date "2026-08-10"}
-                  store)]
-      (println (str "  Result: " (:stage result)))
-      result)))
+(defn- exec-op [actor tid request context]
+  (g/run* actor {:request request :context context} {:thread-id tid}))
 
-(defn scenario-2-delivery-status
-  "Scenario 2: Coordinate delivery status update"
-  [s]
-  (println "\n[Scenario 2] Delivery Status Update")
-  (let [store (store/load-demo-deliveries! s)]
-    (let [result (op/execute-operation
-                  :coordinate-delivery-status-update
-                  "D001"
-                  {:status :in-transit}
-                  store)]
-      (println (str "  Result: " (:stage result)))
-      result)))
+(defn- approve! [actor tid]
+  (g/run* actor {:approval {:status :approved :by "coordinator-01"}}
+          {:thread-id tid :resume? true}))
 
-(defn scenario-3-supply-request
-  "Scenario 3: Coordinate supply request (non-food)"
-  [s]
-  (println "\n[Scenario 3] Supply Request (Non-Food)")
-  (let [store (store/load-demo-supplies! s)]
-    (let [result (op/execute-operation
-                  :coordinate-supply-request
-                  "S001"
-                  {:quantity 100 :item-type "linens"}
-                  store)]
-      (println (str "  Result: " (:stage result)))
-      result)))
+(defn- reject! [actor tid]
+  (g/run* actor {:approval {:status :rejected :by "coordinator-01"}}
+          {:thread-id tid :resume? true}))
 
-(defn scenario-4-staff-shift
-  "Scenario 4: Staff shift proposal"
-  [s]
-  (println "\n[Scenario 4] Staff Shift Proposal")
-  (let [store (store/load-demo-shifts! s)]
-    (let [result (op/execute-operation
-                  :schedule-staff-shift-proposal
-                  "ST001"
-                  {:role :server :duration-hours 6}
-                  store)]
-      (println (str "  Result: " (:stage result)))
-      result)))
-
-(defn scenario-5-safety-escalation
-  "Scenario 5: Safety concern escalation (always escalates, never auto-commits)"
-  [s]
-  (println "\n[Scenario 5] Safety Concern Escalation")
-  (let [store (store/load-demo-events! s)]
-    (let [result (op/execute-operation
-                  :flag-safety-concern
-                  "E001"
-                  {:concern "Facility ventilation issue detected"}
-                  store)]
-      (println (str "  Result: " (:stage result)))
-      result)))
-
-;; --- Demo Runner ---
-
-(defn run-all-scenarios
-  "Run all 5 demo scenarios"
+(defn demo
+  "Run the compiled StateGraph through a commit path, an
+  escalate->approve->commit path, an auto-commit path, an
+  escalate->reject->hold path, and a hard-hold path; print each result
+  and the final audit ledger."
   []
-  (println "╔════════════════════════════════════════════════════════════╗")
-  (println "║ ISIC-562 Event Catering Coordination Actor Demo            ║")
-  (println "╚════════════════════════════════════════════════════════════╝")
-  (let [store (store/new-store)]
-    (let [results
-          [(scenario-1-event-scheduling store)
-           (scenario-2-delivery-status (store/new-store))
-           (scenario-3-supply-request (store/new-store))
-           (scenario-4-staff-shift (store/new-store))
-           (scenario-5-safety-escalation (store/new-store))]]
-      (println "\n" "─── Summary ───")
-      (println (str "5/5 scenarios completed"))
-      results)))
+  (let [st (-> (store/mem-store)
+               store/load-demo-events!
+               store/load-demo-deliveries!
+               store/load-demo-supplies!
+               store/load-demo-shifts!)
+        actor (operation/build st)]
+
+    (println "=== Event Catering Operations Coordinator Demo ===")
+
+    (println "\n== schedule-catering-event E001 (verified, phase-3, governor-clean -> commit) ==")
+    (println (exec-op actor "t1"
+                      {:operation :schedule-catering-event :target-id "E001"
+                       :data {:venue "Grand Hall Downtown" :date "2026-08-15" :capacity 150}}
+                      coordinator))
+
+    (println "\n== coordinate-delivery-status-update D001 (verified, phase-3 -> commit) ==")
+    (println (exec-op actor "t2"
+                      {:operation :coordinate-delivery-status-update :target-id "D001"
+                       :data {:destination "Grand Hall Downtown" :time "15:00" :status :in-transit}}
+                      coordinator))
+
+    (println "\n== flag-safety-concern E001 (ALWAYS escalates -- coordinator approves) ==")
+    (let [r (exec-op actor "t3"
+                     {:operation :flag-safety-concern :target-id "E001"
+                      :data {:concern "Facility ventilation issue detected"}}
+                     coordinator)]
+      (println r)
+      (println "-- coordinator approves --")
+      (println (approve! actor "t3")))
+
+    (println "\n== coordinate-supply-request S001 (phase-3 -> auto-commit) ==")
+    (println (exec-op actor "t4"
+                      {:operation :coordinate-supply-request :target-id "S001"
+                       :data {:item-type "linens" :quantity 100 :unit-cost 0.50}}
+                      coordinator))
+
+    (println "\n== coordinate-supply-request S001 (phase-0 -> escalate -- coordinator rejects) ==")
+    (let [r (exec-op actor "t5"
+                     {:operation :coordinate-supply-request :target-id "S001"
+                      :data {:item-type "linens" :quantity 100 :unit-cost 0.50}}
+                     (assoc coordinator :phase 0))]
+      (println r)
+      (println "-- coordinator rejects --")
+      (println (reject! actor "t5")))
+
+    (println "\n== schedule-catering-event E999 (unregistered -> HARD hold, no interrupt) ==")
+    (println (exec-op actor "t6"
+                      {:operation :schedule-catering-event :target-id "E999"
+                       :data {:venue "Nowhere" :date "2026-08-01" :capacity 10}}
+                      coordinator))
+
+    (println "\n== audit ledger ==")
+    (doseq [f (store/ledger st)] (println f))
+
+    {:ledger (store/ledger st)}))
+
+(defn -main
+  "clojure -M:dev:run entrypoint."
+  [& _args]
+  (demo))
+
+(comment
+  ;; In a real REPL:
+  (demo)
+  )

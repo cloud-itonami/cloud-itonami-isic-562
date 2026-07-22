@@ -1,10 +1,40 @@
 (ns cateringops.store
-  "SSoT: event/delivery registry, append-only ledgers")
+  "SSoT for the event-catering operations coordinator, behind a `Store`
+  protocol so the backend is a swap, not a rewrite (mirrors
+  `cerealops.store`, cloud-itonami-isic-0111):
 
-;; --- Data Model ---
+    - `MemStore`     -- atom-backed. Deterministic default for
+                        dev/tests/demo (no deps).
+    - `DatomicStore` -- backed by `langchain.db`, a Datomic-API-compatible
+                        EAV store (datalog q / pull / upsert). Pure `.cljc`,
+                        so it runs offline AND can be pointed at a real
+                        Datomic Local or a kotoba-server pod by swapping
+                        `langchain.db`'s `:db-api`.
+
+  Both implement the same protocol and pass the same contract
+  (test/cateringops/store_contract_test.cljc).
+
+  Events and deliveries are the units of authority
+  `cateringops.governor`'s verification check gates on: a target must be
+  BOTH `:registered?` and `:verified?` before any proposal referencing it
+  can be considered. Supplies and staff shifts are recorded for the
+  operational record but aren't independently gated the same way (see
+  `cateringops.governor`).
+
+  The append-only audit ledger (`ledger`/`append-ledger!`) is this
+  actor's core missing plumbing until now: `cateringops.operation`'s
+  `:commit`/`:hold` graph nodes append every committed/held/
+  approval-rejected decision fact here, so an event's operating history
+  is always a query over an immutable log -- the same discipline every
+  sibling actor's ledger provides."
+  (:require [langchain.db :as d]
+            [langchain-store.core :as ls]))
+
+;; ------------------------------ Data model ------------------------------
+;; Pure constructors, independent of any store backend.
 
 (defn new-event
-  "Create an event record (not yet registered/verified)"
+  "Create an event record (not yet registered/verified)."
   [id name client-name date venue capacity]
   {:id id
    :name name
@@ -17,7 +47,7 @@
    :status :pending})
 
 (defn new-delivery
-  "Create a delivery record (not yet registered/verified)"
+  "Create a delivery record (not yet registered/verified)."
   [id event-id destination scheduled-time]
   {:id id
    :event-id event-id
@@ -28,7 +58,7 @@
    :status :pending})
 
 (defn new-supply-item
-  "Create a supply request (equipment, linens, cleaning supplies)"
+  "Create a supply request (equipment, linens, cleaning supplies)."
   [id event-id item-type quantity unit-cost]
   {:id id
    :event-id event-id
@@ -38,7 +68,7 @@
    :status :pending})
 
 (defn new-staff-shift
-  "Create a staff shift proposal"
+  "Create a staff shift proposal."
   [id event-id role start-time end-time]
   {:id id
    :event-id event-id
@@ -47,45 +77,65 @@
    :end-time end-time
    :status :proposed})
 
-;; --- In-Memory Store ---
+;; -------------------------------- Store ---------------------------------
 
-(defprotocol IStore
-  "Event catering store interface"
-  (lookup-event [_ event-id] "Fetch event by ID")
-  (all-events [_] "List all events")
-  (lookup-delivery [_ delivery-id] "Fetch delivery by ID")
-  (all-deliveries [_] "List all deliveries")
-  (lookup-supply [_ supply-id] "Fetch supply request by ID")
-  (register-event! [_ event] "Mark event as registered")
-  (verify-event! [_ event-id] "Mark event as verified")
-  (append-ledger! [_ ledger-key entry] "Append to audit ledger"))
+(defprotocol Store
+  (lookup-event [store event-id] "Fetch event record by ID (nil if absent).")
+  (all-events [store] "List all event records.")
+  (register-event! [store event] "Register (or upsert) an event, marking it :registered?.")
+  (verify-event! [store event-id] "Mark a registered event as :verified?.")
+  (lookup-delivery [store delivery-id] "Fetch delivery record by ID (nil if absent).")
+  (all-deliveries [store] "List all delivery records.")
+  (register-delivery! [store delivery] "Register (or upsert) a delivery, marking it :registered?.")
+  (verify-delivery! [store delivery-id] "Mark a registered delivery as :verified?.")
+  (lookup-supply [store supply-id] "Fetch supply-request record by ID (nil if absent).")
+  (add-supply! [store supply] "Register (or upsert) a supply request.")
+  (lookup-shift [store shift-id] "Fetch staff-shift record by ID (nil if absent).")
+  (add-shift! [store shift] "Register (or upsert) a staff-shift proposal.")
+  (ledger [store] "The append-only audit ledger, in append order.")
+  (append-ledger! [store fact] "Append one immutable decision fact to the ledger. Returns fact."))
 
-(defrecord MemStore [events deliveries supplies shifts ledger]
-  IStore
-  (lookup-event [_ event-id] (get @events event-id))
-  (all-events [_] (vals @events))
-  (lookup-delivery [_ delivery-id] (get @deliveries delivery-id))
-  (all-deliveries [_] (vals @deliveries))
-  (lookup-supply [_ supply-id] (get @supplies supply-id))
-  (register-event! [_ event]
-    (swap! events assoc (:id event) (assoc event :registered? true)))
-  (verify-event! [_ event-id]
+;; ----------------------------- MemStore (default) -----------------------------
+
+(defrecord MemStore [events deliveries supplies shifts ledger-atom]
+  Store
+  (lookup-event [_store event-id] (when event-id (get @events event-id)))
+  (all-events [_store] (vals @events))
+  (register-event! [_store event]
+    (swap! events assoc (:id event) (assoc event :registered? true))
+    event)
+  (verify-event! [_store event-id]
     (swap! events update event-id assoc :verified? true))
-  (append-ledger! [_ ledger-key entry]
-    (swap! ledger update ledger-key (fnil conj []) entry)))
+  (lookup-delivery [_store delivery-id] (when delivery-id (get @deliveries delivery-id)))
+  (all-deliveries [_store] (vals @deliveries))
+  (register-delivery! [_store delivery]
+    (swap! deliveries assoc (:id delivery) (assoc delivery :registered? true))
+    delivery)
+  (verify-delivery! [_store delivery-id]
+    (swap! deliveries update delivery-id assoc :verified? true))
+  (lookup-supply [_store supply-id] (when supply-id (get @supplies supply-id)))
+  (add-supply! [_store supply]
+    (swap! supplies assoc (:id supply) supply)
+    supply)
+  (lookup-shift [_store shift-id] (when shift-id (get @shifts shift-id)))
+  (add-shift! [_store shift]
+    (swap! shifts assoc (:id shift) shift)
+    shift)
+  (ledger [_store] @ledger-atom)
+  (append-ledger! [_store fact]
+    (swap! ledger-atom conj fact)
+    fact))
 
-(defn new-store []
-  (MemStore.
-   (atom {})
-   (atom {})
-   (atom {})
-   (atom {})
-   (atom {})))
+(defn mem-store
+  "Create an in-memory store."
+  []
+  (MemStore. (atom {}) (atom {}) (atom {}) (atom {}) (atom [])))
 
-;; --- Demo Data ---
+;; --------------------------- Demo data (MemStore) ------------------------
 
-(defn load-demo-events! [store]
-  "Populate store with demo event data"
+(defn load-demo-events!
+  "Populate store with demo event data."
+  [store]
   (let [event1 (new-event "E001" "Corporate Retreat" "TechCorp Inc" "2026-08-15" "Grand Hall Downtown" 150)
         event2 (new-event "E002" "Wedding Reception" "Smith-Johnson" "2026-09-20" "Sunset Manor" 200)]
     (register-event! store event1)
@@ -93,23 +143,102 @@
     (register-event! store event2)
     store))
 
-(defn load-demo-deliveries! [store]
-  "Populate store with demo delivery data"
+(defn load-demo-deliveries!
+  "Populate store with demo delivery data, registered and verified."
+  [store]
   (let [del1 (new-delivery "D001" "E001" "Grand Hall Downtown" "2026-08-15 15:00")
         del2 (new-delivery "D002" "E002" "Sunset Manor" "2026-09-20 17:30")]
-    (swap! (:deliveries store) assoc "D001" del1 "D002" del2)
+    (register-delivery! store del1)
+    (verify-delivery! store "D001")
+    (register-delivery! store del2)
     store))
 
-(defn load-demo-supplies! [store]
-  "Populate store with demo supply requests"
+(defn load-demo-supplies!
+  "Populate store with demo supply requests."
+  [store]
   (let [supp1 (new-supply-item "S001" "E001" "linens" 100 0.50)
         supp2 (new-supply-item "S002" "E001" "glassware" 300 1.25)]
-    (swap! (:supplies store) assoc "S001" supp1 "S002" supp2)
+    (add-supply! store supp1)
+    (add-supply! store supp2)
     store))
 
-(defn load-demo-shifts! [store]
-  "Populate store with demo staff shift proposals"
-  (let [shift1 {:id "ST001" :event-id "E001" :role :server :start-time "2026-08-15 16:00" :end-time "2026-08-15 22:00" :status :proposed}
-        shift2 {:id "ST002" :event-id "E002" :role :coordinator :start-time "2026-09-20 17:00" :end-time "2026-09-21 01:00" :status :proposed}]
-    (swap! (:shifts store) assoc "ST001" shift1 "ST002" shift2)
+(defn load-demo-shifts!
+  "Populate store with demo staff shift proposals."
+  [store]
+  (let [shift1 (new-staff-shift "ST001" "E001" :server "2026-08-15 16:00" "2026-08-15 22:00")
+        shift2 (new-staff-shift "ST002" "E002" :coordinator "2026-09-20 17:00" "2026-09-21 01:00")]
+    (add-shift! store shift1)
+    (add-shift! store shift2)
     store))
+
+;; ----------------------------- DatomicStore (langchain.db) -----------------------------
+
+(def ^:private schema
+  "DataScript/Datomic-style schema: only constraint attrs are declared.
+  Each entity's payload is stored as an EDN string blob (via
+  `langchain-store.core`) so `langchain.db` doesn't try to expand an
+  opaque, caller-defined record into sub-entities. The identity-schema
+  builder, EDN-blob codec and seq-keyed event-log read/append are the
+  shared kotoba-lang/langchain-store machinery (ADR-2607141600)."
+  (ls/identity-schema [:event/id :delivery/id :supply/id :shift/id :ledger/seq]))
+
+(defn- lookup-blob [conn attr payload-attr id]
+  (when id
+    (ls/dec* (d/q [:find '?p '.
+                   :in '$ '?id
+                   :where ['?e attr '?id] ['?e payload-attr '?p]]
+                  (d/db conn) id))))
+
+(defn- all-blobs [conn attr payload-attr]
+  (->> (d/q [:find '[?p ...]
+             :where ['?e attr '_] ['?e payload-attr '?p]]
+            (d/db conn))
+       (mapv ls/dec*)))
+
+(defrecord DatomicStore [conn]
+  Store
+  (lookup-event [_store event-id]
+    (lookup-blob conn :event/id :event/payload event-id))
+  (all-events [_store]
+    (all-blobs conn :event/id :event/payload))
+  (register-event! [store event]
+    (d/transact! conn [{:event/id (:id event)
+                         :event/payload (ls/enc (assoc event :registered? true))}])
+    (lookup-event store (:id event)))
+  (verify-event! [store event-id]
+    (let [e (lookup-event store event-id)]
+      (d/transact! conn [{:event/id event-id :event/payload (ls/enc (assoc e :verified? true))}])
+      (lookup-event store event-id)))
+  (lookup-delivery [_store delivery-id]
+    (lookup-blob conn :delivery/id :delivery/payload delivery-id))
+  (all-deliveries [_store]
+    (all-blobs conn :delivery/id :delivery/payload))
+  (register-delivery! [store delivery]
+    (d/transact! conn [{:delivery/id (:id delivery)
+                         :delivery/payload (ls/enc (assoc delivery :registered? true))}])
+    (lookup-delivery store (:id delivery)))
+  (verify-delivery! [store delivery-id]
+    (let [dl (lookup-delivery store delivery-id)]
+      (d/transact! conn [{:delivery/id delivery-id :delivery/payload (ls/enc (assoc dl :verified? true))}])
+      (lookup-delivery store delivery-id)))
+  (lookup-supply [_store supply-id]
+    (lookup-blob conn :supply/id :supply/payload supply-id))
+  (add-supply! [store supply]
+    (d/transact! conn [{:supply/id (:id supply) :supply/payload (ls/enc supply)}])
+    (lookup-supply store (:id supply)))
+  (lookup-shift [_store shift-id]
+    (lookup-blob conn :shift/id :shift/payload shift-id))
+  (add-shift! [store shift]
+    (d/transact! conn [{:shift/id (:id shift) :shift/payload (ls/enc shift)}])
+    (lookup-shift store (:id shift)))
+  (ledger [_store] (ls/read-stream conn :ledger/seq :ledger/fact))
+  (append-ledger! [store fact]
+    (ls/append-blob! conn :ledger/seq :ledger/fact (count (ledger store)) fact)
+    fact))
+
+(defn datomic-store
+  "A DatomicStore (langchain.db backend), empty until seeded via the
+  same `register-event!`/`register-delivery!`/`add-supply!`/`add-shift!`
+  calls used against MemStore."
+  []
+  (->DatomicStore (d/create-conn schema)))

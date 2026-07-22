@@ -1,5 +1,21 @@
 (ns cateringops.phase
-  "Rollout phases 0–3 (auto-commit gate control)")
+  "Phase gate for the event-catering operations coordinator rollout
+  (0->3 maturity). `phase-auto-commit?` is preserved verbatim from this
+  actor's pre-StateGraph implementation (the exact auto-commit matrix
+  per phase/operation is unchanged); `gate` is new plumbing that folds
+  it into the `:commit|:escalate|:hold` disposition vocabulary
+  `cateringops.operation`'s compiled StateGraph routes on.
+
+  Phase 0: read-only -- every proposal that would otherwise commit is
+    forced to escalate for human review (mirrors the pre-StateGraph
+    behavior of holding everything, but now as a real interrupt-before
+    checkpoint a human can act on, not a dead-end).
+  Phase 1: event scheduling + delivery status auto-commit; other ops
+    escalate.
+  Phase 2: + supply coordination + staff shift auto-commit.
+  Phase 3: all non-safety ops auto-commit; `:flag-safety-concern`
+    NEVER auto-commits at any phase -- always escalates to a human."
+  )
 
 ;; --- Phase Definitions ---
 
@@ -8,8 +24,11 @@
 (def PHASE_2 2)
 (def PHASE_3 3)
 
+(def default-phase PHASE_0)
+
 (defn phase-auto-commit?
-  "Check if operation auto-commits in given phase"
+  "Check if operation auto-commits in given phase. Preserved verbatim
+  (business rule, not plumbing)."
   [phase operation]
   (case phase
     0 false  ;; Phase 0: read-only, all held
@@ -28,32 +47,29 @@
         true)  ;; All others auto-commit
     false))  ;; Unknown phase
 
-(defn phase-allows-operation?
-  "Check if operation is allowed in given phase"
-  [phase operation]
-  ;; All operations allowed in all phases (Governor already filtered scope)
-  ;; But auto-commit depends on phase
-  (if (= operation :flag-safety-concern)
-    true  ;; Always allowed, always escalates
-    true))
+(defn verdict->disposition
+  "Translate Governor verdict to a pre-phase-gate disposition.
+  Governor's hard violation -> `:hold` (already rejected, non-negotiable).
+  Otherwise -> `:commit` (subject to the phase gate below)."
+  [{:keys [approved?]}]
+  (if approved? :commit :hold))
 
-(defn apply-phase-gate
-  "Apply phase-based commitment logic to operation result"
-  [phase result]
-  (let [operation (get-in result [:proposal :operation])]
-    (if (= (:stage result) :approved)
-      (if (phase-auto-commit? phase operation)
-        (assoc result :stage :committed :reason "Auto-committed by phase gate")
-        (assoc result :stage :held :reason "Held for human review in this phase"))
-      result)))
+(defn gate
+  "Phase gate: given the current phase, the request, and the
+  pre-phase-gate disposition, return
+  {:disposition :commit|:hold|:escalate :reason nil|keyword}.
 
-;; --- Demo: Phase Progression ---
+  - `:hold` (a Governor hard violation) always passes through unchanged.
+  - `:commit` is downgraded to `:escalate` unless `phase-auto-commit?`
+    says this op auto-commits at this phase."
+  [phase request disposition]
+  (cond
+    (not= :commit disposition)
+    {:disposition disposition :reason nil}
 
-(defn demo-phase-progression
-  "Show how same proposal is handled across phases"
-  []
-  (let [result {:stage :approved :proposal {:operation :schedule-catering-event :target-id "E001"}}]
-    {0 (apply-phase-gate PHASE_0 result)
-     1 (apply-phase-gate PHASE_1 result)
-     2 (apply-phase-gate PHASE_2 result)
-     3 (apply-phase-gate PHASE_3 result)}))
+    (phase-auto-commit? phase (:operation request))
+    {:disposition :commit :reason nil}
+
+    :else
+    {:disposition :escalate
+     :reason (if (= PHASE_0 phase) :phase-0-readonly :phase-held-for-review)}))
