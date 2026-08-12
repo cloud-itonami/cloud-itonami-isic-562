@@ -638,7 +638,7 @@
 
 (defn- coverage-section
   "Renders the op-vocabulary measurement. Reports what was OBSERVED."
-  [{:keys [unknown observed]}]
+  [{:keys [observed]}]
   (str "  <section class=\"card\">\n"
        "    <h2>Op-vocabulary coverage &mdash; measured, not assumed</h2>\n"
        "    <p class=\"muted\">This scenario deliberately submits one op keyword outside the "
