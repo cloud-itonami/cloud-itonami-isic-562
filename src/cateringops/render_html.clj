@@ -526,28 +526,38 @@
                "<span class=\"ok\">auto-commit</span>"
                "<span class=\"warn\">escalate</span>")))))
 
+(defn- scope-term-hits
+  "DERIVED: for each scope-exclusion term, whether this run's real
+  proposals matched it, and whether that match actually blocked. A term
+  matched inside a `:flag-safety-concern` proposal is EXEMPT -- the
+  governor's one carve-out -- so the two cases are reported separately
+  rather than collapsed into one column that would make a live exemption
+  look like an absent term. Returns `{:blocked #{} :exempt #{}}`."
+  [runs]
+  (reduce (fn [acc {:keys [proposal verdict]}]
+            (let [hit (matched-scope-terms proposal)]
+              (cond
+                (empty? hit) acc
+                (some #(= :scope-excluded (:rule %)) (:violations verdict))
+                (update acc :blocked into hit)
+                :else (update acc :exempt into hit))))
+          {:blocked (sorted-set) :exempt (sorted-set)}
+          runs))
+
 (defn- scope-term-rows
   "The scope-exclusion vocabulary read straight out of
   `governor/scope-excluded-terms-en` and `-ja`, with a DERIVED column
-  saying which terms this run's real proposals actually matched."
+  saying what this run's real proposals actually did with each term."
   [runs]
-  (let [fired (into (sorted-set)
-                    (mapcat (fn [r]
-                              (when (some #(= :scope-excluded (:rule %))
-                                          (:violations (:verdict r)))
-                                (matched-scope-terms (:proposal r)))))
-                    runs)]
+  (let [{:keys [blocked exempt]} (scope-term-hits runs)
+        cell (fn [t]
+               (cond
+                 (contains? blocked t) "<span class=\"critical\">matched &rarr; HARD hold</span>"
+                 (contains? exempt t) "<span class=\"warn\">matched &rarr; exempt (:flag-safety-concern)</span>"
+                 :else (dash)))]
     (concat
-     (for [t governor/scope-excluded-terms-en]
-       (row (code t) "en"
-            (if (contains? fired t)
-              "<span class=\"critical\">matched in this run</span>"
-              (dash))))
-     (for [t governor/scope-excluded-terms-ja]
-       (row (code t) "ja"
-            (if (contains? fired t)
-              "<span class=\"critical\">matched in this run</span>"
-              (dash)))))))
+     (for [t governor/scope-excluded-terms-en] (row (code t) "en" (cell t)))
+     (for [t governor/scope-excluded-terms-ja] (row (code t) "ja" (cell t))))))
 
 (defn- ledger-rows [db]
   (for [{:keys [t op actor subject disposition basis violations summary]} (store/ledger db)]
@@ -764,9 +774,11 @@
                permanent block &mdash; this actor coordinates catering logistics and has no
                food-safety, health-inspection, recipe/menu or cooking-technique authority. The one
                exemption is <code>:flag-safety-concern</code>, which must be able to name a hazard
-               without self-blocking; the &ldquo;matched&rdquo; column is recomputed here from this
-               run's real proposals using the governor's own scan."
-              ["Term" "Lang" "This run"]
+               without self-blocking. The last column is recomputed here from this run's real
+               proposals using the governor's own scan, and separates a term that BLOCKED from one
+               that was matched but exempted &mdash; run <code>t08</code> raises a real concern
+               naming 保健所 and commits, which is the exemption working, not the term being absent."
+              ["Term" "Lang" "What this run did with it"]
               (scope-term-rows runs))
 
      (section "Event register"

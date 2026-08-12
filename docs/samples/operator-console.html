@@ -2592,16 +2592,18 @@ img,svg { max-width: 100%; height: auto; }</style></head><body>
                permanent block &mdash; this actor coordinates catering logistics and has no
                food-safety, health-inspection, recipe/menu or cooking-technique authority. The one
                exemption is <code>:flag-safety-concern</code>, which must be able to name a hazard
-               without self-blocking; the &ldquo;matched&rdquo; column is recomputed here from this
-               run's real proposals using the governor's own scan.</p>
+               without self-blocking. The last column is recomputed here from this run's real
+               proposals using the governor's own scan, and separates a term that BLOCKED from one
+               that was matched but exempted &mdash; run <code>t08</code> raises a real concern
+               naming 保健所 and commits, which is the exemption working, not the term being absent.</p>
     <table>
-      <thead><tr><th>Term</th><th>Lang</th><th>This run</th></tr></thead>
+      <thead><tr><th>Term</th><th>Lang</th><th>What this run did with it</th></tr></thead>
       <tbody>
         <tr><td><code>food-safety</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>health-inspection</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>health-code</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
-        <tr><td><code>recipe</code></td><td>en</td><td><span class="critical">matched in this run</span></td></tr>
-        <tr><td><code>menu</code></td><td>en</td><td><span class="critical">matched in this run</span></td></tr>
+        <tr><td><code>recipe</code></td><td>en</td><td><span class="critical">matched &rarr; HARD hold</span></td></tr>
+        <tr><td><code>menu</code></td><td>en</td><td><span class="critical">matched &rarr; HARD hold</span></td></tr>
         <tr><td><code>food-handling</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>food preparation</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>cooking technique</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
@@ -2609,11 +2611,11 @@ img,svg { max-width: 100%; height: auto; }</style></head><body>
         <tr><td><code>safety-authority</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>override</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>certification</code></td><td>en</td><td><span class="muted">&mdash;</span></td></tr>
-        <tr><td><code>食品安全</code></td><td>ja</td><td><span class="critical">matched in this run</span></td></tr>
-        <tr><td><code>調理法</code></td><td>ja</td><td><span class="critical">matched in this run</span></td></tr>
+        <tr><td><code>食品安全</code></td><td>ja</td><td><span class="critical">matched &rarr; HARD hold</span></td></tr>
+        <tr><td><code>調理法</code></td><td>ja</td><td><span class="critical">matched &rarr; HARD hold</span></td></tr>
         <tr><td><code>調理技法</code></td><td>ja</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>衛生管理</code></td><td>ja</td><td><span class="muted">&mdash;</span></td></tr>
-        <tr><td><code>保健所</code></td><td>ja</td><td><span class="muted">&mdash;</span></td></tr>
+        <tr><td><code>保健所</code></td><td>ja</td><td><span class="warn">matched &rarr; exempt (:flag-safety-concern)</span></td></tr>
         <tr><td><code>レシピ</code></td><td>ja</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>メニュー</code></td><td>ja</td><td><span class="muted">&mdash;</span></td></tr>
         <tr><td><code>食中毒</code></td><td>ja</td><td><span class="muted">&mdash;</span></td></tr>
