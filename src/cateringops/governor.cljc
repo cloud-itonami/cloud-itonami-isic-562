@@ -24,7 +24,7 @@
        substring scan) -- `:flag-safety-concern` is exempted from this
        scan (a legitimate facility/sanitation safety concern is allowed
        to mention \"safety\" without self-blocking)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [cateringops.store :as store]))
 
 ;; ----------------------------- scope exclusion -----------------------------
@@ -46,8 +46,8 @@
   `:flag-safety-concern` is exempted -- it should not self-block even
   when it legitimately mentions \"safety\"."
   [proposal]
-  (let [proposal-str (str/lower-case (str proposal))
-        has-exclusion (some #(str/includes? proposal-str (str/lower-case %))
+  (let [proposal-str (str/lower (str proposal))
+        has-exclusion (some #(str/includes? proposal-str (str/lower %))
                              scope-excluded-terms)
         is-safety-concern (= :flag-safety-concern (:operation proposal))]
     (boolean (and has-exclusion (not is-safety-concern)))))
