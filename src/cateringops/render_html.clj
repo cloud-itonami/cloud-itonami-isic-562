@@ -87,7 +87,7 @@
 
   Usage: `clojure -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [jp-go-dds.skin]
             [langgraph.graph :as g]
             [cateringops.advisor :as advisor]
@@ -355,7 +355,7 @@
   (let [ledger    (store/ledger db)
         names     (deep-key-names ledger)
         approver? #(contains? #{"approved-by" "approved_by" "approver" "by" "approved-by-id"}
-                              (str/lower-case %))]
+                              (str/lower %))]
     {:granted      (vec (sort (into #{} (keep #(:by (fact-of (:audit %) :approval-granted))) runs)))
      :on-ledger?   (boolean (some approver? names))
      :granted-fact-on-ledger? (boolean (some #(= :approval-granted (:t %)) ledger))
@@ -412,8 +412,8 @@
   (lower-cased `str` of the whole proposal map). Vector order follows the
   governor's own term vector, so it is deterministic."
   [proposal]
-  (let [s (str/lower-case (str proposal))]
-    (vec (filter #(str/includes? s (str/lower-case %)) governor/scope-excluded-terms))))
+  (let [s (str/lower (str proposal))]
+    (vec (filter #(str/includes? s (str/lower %)) governor/scope-excluded-terms))))
 
 ;; ----------------------------- sections (all derived) -----------------------------
 
