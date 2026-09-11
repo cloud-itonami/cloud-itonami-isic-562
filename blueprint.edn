@@ -29,8 +29,8 @@
  Advisor is now a real `Advisor` protocol + `MockAdvisor` (the
  pre-existing confidence-scoring functions are wired in for the first
  time, not dead code), and the test suite is real `clojure.test`
- `deftest`/`is` (16 tests / 90 assertions, `clojure -M:dev:test`) that
+ `deftest`/`is` (16 tests / 90 assertions, `kbb -M:dev:test`) that
  can genuinely fail -- replacing a prior harness that printed
  'All tests passed! (16/16)' unconditionally regardless of outcome.
  Demo runnable end-to-end against both Store backends
- (`clojure -M:dev:run`)."}
+ (`kbb -M:dev:run`)."}

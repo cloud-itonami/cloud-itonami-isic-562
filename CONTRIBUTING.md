@@ -12,8 +12,8 @@ This project uses ClojureScript (`.cljc`) and nbb for testing and demo execution
 ### Development Workflow
 
 1. Edit files in `src/cateringops/`
-2. Run tests: `nbb scripts/run-tests.cljs`
-3. Run demo: `nbb scripts/run-demo.cljs`
+2. Run tests: `kbb --backend sci scripts/run-tests.cljk`
+3. Run demo: `kbb --backend sci scripts/run-demo.cljk`
 4. Commit and push to a feature branch
 5. Submit a pull request
 
