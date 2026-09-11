@@ -12,7 +12,7 @@
                         `langchain.db`'s `:db-api`.
 
   Both implement the same protocol and pass the same contract
-  (test/cateringops/store_contract_test.cljc).
+  (test/cateringops/store_contract_test.cljk).
 
   Events and deliveries are the units of authority
   `cateringops.governor`'s verification check gates on: a target must be
