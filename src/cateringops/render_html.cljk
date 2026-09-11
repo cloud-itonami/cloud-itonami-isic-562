@@ -6,7 +6,7 @@
   actor stack -- `cateringops.operation` (a compiled langgraph
   StateGraph) -> `cateringops.governor` -> `cateringops.phase` ->
   `cateringops.store` -- through a scenario extended from this repo's
-  own `cateringops.sim` demo driver (`clojure -M:dev:run`), then renders
+  own `cateringops.sim` demo driver (`kbb -M:dev:run`), then renders
   the resulting store and append-only audit ledger.
 
   NOTHING on the page is hand-typed. Every event id, client name, venue,
@@ -85,7 +85,7 @@
   generated id, and two consecutive runs are byte-identical (verified
   with `cmp`).
 
-  Usage: `clojure -M:dev:render-html [out-file]`
+  Usage: `kbb -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
   (:require [kotoba.lang.text :as str]
             [jp-go-dds.skin]
@@ -712,7 +712,7 @@
      "<span class=\"badge\">coordination-only &middot; every effect is :propose</span> "
      "<span class=\"badge\">no food-safety authority</span></p>\n"
      "<p class=\"subtitle\">Generated at build time by <code>cateringops.render-html</code> "
-     "(<code>clojure -M:dev:render-html</code>) by actually running the compiled "
+     "(<code>kbb -M:dev:render-html</code>) by actually running the compiled "
      "<code>cateringops.operation</code> StateGraph over a freshly seeded store. Every value below "
      "was read back out of that run or out of the live <code>governor</code> / <code>phase</code> "
      "vars &mdash; there is no mock markup on this page, and no timestamp, so successive "
@@ -824,7 +824,7 @@
      "  the public health authority. Every proposal carries <code>:effect :propose</code>; committing\n"
      "  one means a coordination fact was logged, never that food was prepared, served or cleared as\n"
      "  safe.</p>\n"
-     "  <p>Regenerate: <code>clojure -M:dev:render-html</code></p>\n"
+     "  <p>Regenerate: <code>kbb -M:dev:render-html</code></p>\n"
      "</footer>\n"
      "</body></html>\n")))
 

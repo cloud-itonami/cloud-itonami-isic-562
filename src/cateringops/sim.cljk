@@ -1,5 +1,5 @@
 (ns cateringops.sim
-  "Demo driver -- `clojure -M:dev:run`. Walks a registered/verified
+  "Demo driver -- `kbb -M:dev:run`. Walks a registered/verified
   event and delivery through a clean phase-3 auto-commit, an
   always-escalate safety concern (human approves), an auto-commit
   supply coordination, and a hard-hold (unregistered event), then
@@ -85,7 +85,7 @@
     {:ledger (store/ledger st)}))
 
 (defn -main
-  "clojure -M:dev:run entrypoint."
+  "kbb -M:dev:run entrypoint."
   [& _args]
   (demo))
 

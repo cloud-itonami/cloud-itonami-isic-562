@@ -17,7 +17,7 @@ append-only audit ledger (`ledger`/`append-ledger!`), implemented on
 both `MemStore` and a `DatomicStore` (backed by `langchain.db` via
 `kotoba-lang/langchain-store`) that pass the same store-contract test
 (`test/cateringops/store_contract_test.cljk`). 16 tests / 90 assertions
-green (`clojure -M:dev:test`); the demo runner (`clojure -M:dev:run`)
+green (`kbb -M:dev:test`); the demo runner (`kbb -M:dev:run`)
 drives the compiled graph end-to-end through a commit path, an
 escalate→approve→commit path, an auto-commit path, an
 escalate→reject→hold path, and a hard-hold path, printing the
@@ -50,7 +50,7 @@ resulting audit ledger.
 - `cateringops.operation` — compiles the `langgraph-clj` `StateGraph`:
   advise → govern → decide → commit | request-approval → commit | hold, with
   `interrupt-before` + checkpoint-based resume for escalated operations
-- `cateringops.sim` — demo runner (`clojure -M:dev:run`)
+- `cateringops.sim` — demo runner (`kbb -M:dev:run`)
 - Tests (`test/cateringops/`) — real `clojure.test` `deftest`/`is` coverage
   (store, governor, advisor, phase, store-contract Mem≡Datomic parity, and
   end-to-end compiled-StateGraph paths)
@@ -59,13 +59,13 @@ resulting audit ledger.
 
 ```bash
 # Run tests (langgraph/langchain-store resolved via local sibling checkouts)
-clojure -M:dev:test
+kbb -M:dev:test
 
 # Run the linter (clj-kondo, 0 errors / 0 warnings)
-clojure -M:lint
+kbb -M:lint
 
 # Run the demo -- drives the compiled StateGraph end-to-end
-clojure -M:dev:run
+kbb -M:dev:run
 ```
 
 `:dev` pins the transitive `langchain` dependency to the in-monorepo local
