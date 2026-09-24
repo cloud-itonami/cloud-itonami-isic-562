@@ -1,5 +1,5 @@
 (ns cateringops.phase-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [kotoba.test :refer [deftest testing is]]
             [cateringops.phase :as phase]))
 
 (deftest phase-auto-commit-matrix

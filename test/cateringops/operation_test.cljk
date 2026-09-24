@@ -6,7 +6,7 @@
   `:status`/`:frontier` (proving a genuine `interrupt-before` pause,
   not a simulated one) AND that the `:commit`/`:hold` nodes genuinely
   appended to the Store's append-only ledger."
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [kotoba.test :refer [deftest testing is]]
             [cateringops.store :as store]
             [cateringops.operation :as operation]
             [langgraph.graph :as g]))
