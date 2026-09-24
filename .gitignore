@@ -3,3 +3,4 @@
 target/
 .lsp/
 node_modules/
+.nbb/

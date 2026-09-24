@@ -8,7 +8,7 @@
   detect a real failure. Every assertion below is a real
   `clojure.test/is` that fails the run (and CI, via
   `cognitect.test-runner`) on a genuine regression."
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [kotoba.test :refer [deftest testing is]]
             [cateringops.store :as store]))
 
 (deftest store-event-and-delivery-lifecycle
