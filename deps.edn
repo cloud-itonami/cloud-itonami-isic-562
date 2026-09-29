@@ -22,7 +22,7 @@
        org.clojure/clojure {:mvn/version "1.11.1"}
         org.clojure/clojurescript {:mvn/version "1.10.914"}
         ;; jp-go-dds: デジタル庁デザインシステム (DADS) -- the workspace-wide
-        ;; BASE design system (com-junkawasaki/root CLAUDE.md, 2026-08-05).
+        ;; BASE design system (com-junkawasaki/root AGENTS.md, 2026-08-05).
         ;; `jp-go-dds.skin/dds+skin` supplies the whole stylesheet that
         ;; `cateringops.render-html` inlines into
         ;; docs/samples/operator-console.html. Pinned by git sha (this dep
